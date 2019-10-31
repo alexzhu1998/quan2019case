@@ -1,0 +1,135 @@
+*IMPORT DATA;
+
+proc import 
+	datafile = "C:/Users/z5161677/Documents/R/ACTL3142/Quantium Combined Dataset2.csv"
+	out = work.sample
+	dbms = csv
+	REPLACE;
+run;
+
+data work.test1;
+	set work.sample;
+	if SERVICE_ID in ('ROOM1', 'ROOM2','ROOM3','ROOM4') then days_stayed = quantity;
+run;
+
+
+
+*COUNT HOTELS;
+
+proc sql;
+	create table test2 as
+	select CUST_ID, HOTEL_ID,sum(days_stayed) as count
+	from work.test1
+	group by 1,2
+	; 
+	
+
+proc transpose data=test2 out=hotel_count prefix=days_hotel;
+    by CUST_ID ;
+    id HOTEL_ID;
+    var count;
+run;
+
+data hotel_count;
+	set hotel_count;
+	drop _name_;
+run;
+
+
+*COUNT BOOKINGS;
+
+proc sql;
+	create table count_bookings as
+	select CUST_ID, count(days_stayed) as count_bookings
+	from work.test1
+	group by 1
+	;
+
+*COUNT PROFIT;
+
+
+proc sql;
+	create table profit_per_cust as
+	select CUST_ID, sum(profit) as profit
+	from work.test1
+	group by 1
+	;
+
+
+*COUNT SERVICES;
+
+
+proc sql;
+	create table test3 as
+	select CUST_ID, SERVICE_ID, sum(quantity) as count
+	from work.test1
+	group by 1,2
+	; 
+
+proc transpose data=test3 out=service_count prefix=days_or_number_;
+    by CUST_ID ;
+    id SERVICE_ID;
+    var count;
+run;
+
+data service_count;
+	set service_count;
+	drop _name_;
+run;
+
+
+
+*COUNT WEEKDAYS STAYED;
+
+data test5;
+	set test1;
+	keep CUST_ID CHECK_IN_DATE CHECK_OUT_DATE days_stayed;
+run;
+
+data test5;
+	set test5;
+	check_in_day = weekday(check_in_date);
+	check_out_day = weekday(check_out_date);
+run;
+
+
+
+data test5;
+	set test5;
+	Monday = intck('week.2',CHECK_IN_DATE , CHECK_OUT_DATE);
+	Tuesday = intck('week.3',CHECK_IN_DATE , CHECK_OUT_DATE);
+	Wednesday = intck('week.4',CHECK_IN_DATE , CHECK_OUT_DATE);
+	Thursday = intck('week.5',CHECK_IN_DATE, CHECK_OUT_DATE);
+	Friday = intck('week.6',CHECK_IN_DATE , CHECK_OUT_DATE);
+	Saturday = intck('week.7',CHECK_IN_DATE , CHECK_OUT_DATE);
+	Sunday = intck('week.1',CHECK_IN_DATE , CHECK_OUT_DATE);
+
+run;
+
+data test5;
+	set test5; 
+	drop CHECK_IN_DATE CHECK_OUT_DATE days_stayed check_in_day check_out_day;
+run;
+
+proc sql;
+	create table weekdays as 
+	select CUST_ID, sum(Monday) as Monday, sum(Tuesday) as Tuesday, sum(Wednesday) as Wednesday, sum(Thursday) as Thursday, sum(Friday) as Friday, sum(Saturday) as Saturday,sum(Sunday) as Sunday
+	from test5
+	group by 1
+; 
+
+
+*MERGE;
+
+data merged;
+	merge profit_per_cust hotel_count service_count weekdays count_bookings;
+	by CUST_ID;
+run;
+
+
+proc export 
+  data= merged 
+  dbms=csv
+  outfile="C:/Users/z5161677/Documents/R/ACTL3142/merged.csv"
+  replace;
+run;
